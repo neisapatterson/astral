@@ -1,3 +1,4 @@
+-- Assumes copper double chests
 function FindEmptySlot(chest)
     print("Finding empty slot.")
     for i = 1, 90 do
@@ -34,9 +35,33 @@ function FindConnectedChests(inputChestId)
     return chests
 end
 
-function CanStack(currStackSize, itemCount)
+function CanStack(currStackSize, itemCount, maxItemCount)
     print("Checking if items can stack.")
-    return currStackSize + itemCount <= 64
+    return currStackSize + itemCount <= maxItemCount
+end
+
+function StoreEmptySlot(inputChest, inputSlot, count, connectedChests)
+    print("Storing item in empty slot.")
+    local allFull = true
+    for _, destChest in pairs(connectedChests) do
+        if peripheral.getName(destChest) ~= peripheral.getName(inputChest) then
+            local emptySlot = FindEmptySlot(destChest)
+            if emptySlot ~= -1 then
+                inputChest.pushItems(peripheral.getName(destChest), inputSlot,
+                    count, emptySlot)
+                allFull = false
+                break
+            else
+                print("No empty slot found in connected chest: " .. peripheral.getName(destChest))
+            end
+        else
+            print("Skipping input chest: " .. peripheral.getName(inputChest))
+        end
+    end
+
+    if allFull then
+        print("All connected chests are full.")
+    end
 end
 
 function StoreItem(inputChest, connectedChests)
@@ -49,10 +74,11 @@ function StoreItem(inputChest, connectedChests)
             print("Checking connected chest: " .. peripheral.getName(currChest))
             for searchSlot, searchItem in pairs(currChest.list()) do
                 if searchItem.name == storeItem.name then
-                    if searchItem.count < 64 then
+                    local count = currChest.getItemDetail(searchSlot).maxCount
+                    if searchItem.count < count then
                         found = true
 
-                        if CanStack(searchItem.count, storeItem.count) then
+                        if CanStack(searchItem.count, storeItem.count, storeItem.maxCount) then
                             print("Pushing items to the chest after CanStack.")
                             inputChest.pushItems(peripheral.getName(currChest), storeSlot, storeItem.count, searchSlot)
                         else
@@ -64,48 +90,23 @@ function StoreItem(inputChest, connectedChests)
 
                             -- If not enough space, push the item to the first empty slot in a chest
                             if remainingCount > 0 then
-                                for _, newChest in pairs(connectedChests) do
-                                    if peripheral.getName(newChest) ~= peripheral.getName(inputChest) then
-                                        local emptySlot = FindEmptySlot(newChest)
-                                        if emptySlot ~= -1 then
-                                            inputChest.pushItems(peripheral.getName(newChest), storeSlot, storeItem
-                                            .count, emptySlot)
-                                            break
-                                        end
-                                    else
-                                        print("Skipping input chest: " .. peripheral.getName(inputChest))
-                                    end
-                                end
+                                StoreEmptySlot(inputChest, storeSlot, storeItem.count, connectedChests)
                             end
                         end
                     end
                 end
             end
 
-            -- ::continue::
         end
 
-        local successful = false
         if not found then
-            for _, currChest in pairs(connectedChests) do
-                if peripheral.getName(currChest) ~= peripheral.getName(inputChest) then
-                    local emptySlot = FindEmptySlot(inputChest)
-                    if emptySlot ~= -1 then
-                        inputChest.pushItems(peripheral.getName(inputChest), storeSlot, storeItem.count, emptySlot)
-                        successful = true
-                    end
-                end
-            end
-        end
-
-        if not successful then
-            print("No empty slot available in any connected chest for item: " .. storeItem.name)
+            StoreEmptySlot(inputChest, storeSlot, storeItem.count, connectedChests)
         end
     end
 end
 
 function Main()
-    local inputChestId = "2" -- Change this to the ID of your input chest
+    local inputChestId = "0" -- Change this to the ID of your input chest
     local inputChest = GetInputChest(inputChestId)
     local connectedChests = FindConnectedChests(inputChestId)
 
